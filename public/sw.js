@@ -8,7 +8,7 @@ const STATIC_ASSETS = [
   '/icons/icon.svg'
 ];
 
-// Install: Cache core static assets
+// Install: Cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -18,7 +18,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate: Clean up old caches
+// Activate: Bersihkan cache lama
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -30,7 +30,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: Network-first for API, Cache-first / Stale-while-revalidate for static assets
+// Fetch handler
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
