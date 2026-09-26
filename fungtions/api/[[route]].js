@@ -1,12 +1,14 @@
+/**
+ * Cloudflare Pages Functions - API Router
+ * Path: functions/api/[[route]].js
+ */
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-/**
- * Helper response JSON standar
- */
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -17,9 +19,6 @@ function jsonResponse(data, status = 200) {
   });
 }
 
-/**
- * Helper untuk parsing parameter rute dan query string
- */
 function parseRequestInfo(request, params) {
   const url = new URL(request.url);
   const routeParts = Array.isArray(params?.route)
@@ -28,7 +27,6 @@ function parseRequestInfo(request, params) {
     ? [params.route]
     : [];
 
-  // Mendukung query param ?mode=... atau REST path /api/:resource/:id
   const firstSegment = (routeParts[0] || "").toLowerCase();
   const queryMode = (url.searchParams.get("mode") || "").toLowerCase();
 
@@ -49,23 +47,18 @@ function parseRequestInfo(request, params) {
     resource = "transaction";
   }
 
-  // ID bisa berasal dari /api/:resource/:id atau ?id=...
   const pathId = routeParts.length > 1 ? routeParts[1] : null;
   const queryId = url.searchParams.get("id");
   const id = pathId || queryId || null;
-
   const month = url.searchParams.get("month") || null;
 
   return { url, resource, id, month };
 }
 
-/**
- * Handler utama untuk semua method
- */
 export async function onRequest(context) {
   const { request } = context;
 
-  // 1. Tangani Preflight OPTIONS untuk CORS
+  // 1. CORS Preflight
   if (request.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -73,13 +66,13 @@ export async function onRequest(context) {
     });
   }
 
-  // 2. Validasi Binding D1 Database
+  // 2. Cek D1 Binding
   const db = context.env.DB || context.env.DATABASE || context.env.d1;
   if (!db) {
     return jsonResponse(
       {
         error:
-          "Database D1 belum terhubung! Pastikan D1 binding dengan variable name 'DB' sudah ditambahkan di Cloudflare Pages Dashboard (Settings > Functions > D1 database bindings) atau di wrangler.toml.",
+          "Database D1 belum terhubung! Pastikan D1 binding dengan variable name 'DB' sudah ditambahkan di Cloudflare Pages Dashboard.",
       },
       500
     );
@@ -112,23 +105,12 @@ export async function onRequest(context) {
   }
 }
 
-// Method-specific exports untuk kompatibilitas penuh Cloudflare Pages
-export const onRequestGet = (ctx) => onRequest(ctx);
-export const onRequestPost = (ctx) => onRequest(ctx);
-export const onRequestPut = (ctx) => onRequest(ctx);
-export const onRequestDelete = (ctx) => onRequest(ctx);
-export const onRequestOptions = () =>
-  new Response(null, { status: 204, headers: CORS_HEADERS });
-
-/**
- * === 1. GET DATA ===
- */
+// === 1. GET DATA ===
 async function handleGet(context, db) {
   const { request, params } = context;
   const { resource, month } = parseRequestInfo(request, params);
 
   if (resource === "investment") {
-    // Data Portofolio Utama
     const sql = `
       SELECT *, (current_amount - initial_amount) AS profit
       FROM investments
@@ -139,7 +121,6 @@ async function handleGet(context, db) {
   }
 
   if (resource === "history") {
-    // Data Riwayat untuk Grafik Garis
     const sql = `
       SELECT name, amount, strftime('%Y-%m-%d %H:%M', date) AS date_label
       FROM investment_history
@@ -149,7 +130,7 @@ async function handleGet(context, db) {
     return jsonResponse(results || []);
   }
 
-  // Default: Data Transaksi Arus Kas
+  // Data Transaksi
   if (month) {
     const sql = `
       SELECT * FROM transactions
@@ -168,16 +149,13 @@ async function handleGet(context, db) {
   }
 }
 
-/**
- * === 2. POST DATA (TAMBAH) ===
- */
+// === 2. POST DATA (TAMBAH) ===
 async function handlePost(context, db) {
   const { request, params } = context;
   const { resource } = parseRequestInfo(request, params);
   const input = await request.json().catch(() => ({}));
 
   if (resource === "investment") {
-    // Simpan Data Aset Investasi
     const type = input.type || "saham";
     const name = input.name || "";
     const initialAmount = Number(input.initial_amount) || 0;
@@ -191,13 +169,12 @@ async function handlePost(context, db) {
       .bind(type, name, initialAmount, currentAmount)
       .run();
 
-    let lastId = insertResult.meta?.last_row_id || insertResult.lastRowId;
+    let lastId = insertResult.meta?.last_row_id;
     if (!lastId) {
       const row = await db.prepare("SELECT last_insert_rowid() AS id").first();
       lastId = row?.id;
     }
 
-    // AUTO LOG HISTORY
     if (lastId) {
       await db
         .prepare(
@@ -210,12 +187,13 @@ async function handlePost(context, db) {
 
     return jsonResponse({ message: "Berhasil disimpan", id: lastId });
   } else {
-    // Simpan Transaksi Biasa
     const type = input.type || "pengeluaran";
     const category = input.category || "lain_lain";
     const amount = Number(input.amount) || 0;
     const description = input.description || "";
-    const date = input.date || new Date().toISOString().split("T")[0];
+    const date = input.date && input.date.trim() !== "" 
+      ? input.date 
+      : new Date().toISOString().split("T")[0];
 
     await db
       .prepare(
@@ -229,9 +207,7 @@ async function handlePost(context, db) {
   }
 }
 
-/**
- * === 3. PUT DATA (UPDATE) ===
- */
+// === 3. PUT DATA (UPDATE) ===
 async function handlePut(context, db) {
   const { request, params } = context;
   const { resource, id } = parseRequestInfo(request, params);
@@ -260,7 +236,6 @@ async function handlePut(context, db) {
       .bind(type, name, initialAmount, currentAmount, id)
       .run();
 
-    // AUTO LOG HISTORY SAAT UPDATE
     await db
       .prepare(
         `INSERT INTO investment_history (investment_id, name, amount, date)
@@ -275,7 +250,9 @@ async function handlePut(context, db) {
     const category = input.category || "lain_lain";
     const amount = Number(input.amount) || 0;
     const description = input.description || "";
-    const date = input.date || new Date().toISOString().split("T")[0];
+    const date = input.date && input.date.trim() !== "" 
+      ? input.date 
+      : new Date().toISOString().split("T")[0];
 
     await db
       .prepare(
@@ -290,9 +267,7 @@ async function handlePut(context, db) {
   }
 }
 
-/**
- * === 4. DELETE DATA (HAPUS) ===
- */
+// === 4. DELETE DATA (HAPUS) ===
 async function handleDelete(context, db) {
   const { request, params } = context;
   const { resource, id } = parseRequestInfo(request, params);
@@ -305,7 +280,6 @@ async function handleDelete(context, db) {
   }
 
   if (resource === "investment") {
-    // Hapus Aset dan Historinya
     await db
       .prepare("DELETE FROM investment_history WHERE investment_id = ?")
       .bind(id)
