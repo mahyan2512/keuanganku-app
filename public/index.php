@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keuanganku - Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><text x='50' y='70' fill='white' font-size='70' text-anchor='middle' font-family='sans-serif' font-weight='bold'>K</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-20">
+
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">K</div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900 hidden sm:block">Keuanganku</h1>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition shadow-sm" title="Export Excel">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                    </button>
+                    <div id="monthFilterContainer">
+                        <input type="month" id="filterMonth" onchange="loadData()" class="bg-slate-100 border-none text-sm font-bold text-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white border-b border-slate-200 pb-0 px-4">
+            <div class="max-w-7xl mx-auto flex gap-6">
+                <button onclick="switchTab('cashflow')" id="tab-cashflow" class="flex-1 sm:flex-none pb-3 border-b-2 text-sm font-bold text-indigo-600 border-indigo-600 transition-all">
+                    Arus Kas
+                </button>
+                <button onclick="switchTab('investment')" id="tab-investment" class="flex-1 sm:flex-none pb-3 border-b-2 text-slate-500 border-transparent hover:text-slate-700 transition-all">
+                    Portofolio
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <div id="view-cashflow" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <span class="text-xs font-bold text-green-600 uppercase tracking-wider bg-green-50 px-2 py-1 rounded">Pemasukan</span>
+                        <p class="text-3xl font-extrabold text-slate-900 mt-2" id="totalIncome">Rp 0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <span class="text-xs font-bold text-red-600 uppercase tracking-wider bg-red-50 px-2 py-1 rounded">Pengeluaran</span>
+                        <p class="text-3xl font-extrabold text-slate-900 mt-2" id="totalExpense">Rp 0</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="font-bold text-lg text-slate-900 mb-4">Arus Kas Mingguan</h3>
+                        <div class="relative h-64 w-full"><canvas id="barChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="font-bold text-lg text-slate-900 mb-4">Proporsi Pengeluaran</h3>
+                        <div class="relative h-64 w-full flex justify-center"><canvas id="doughnutChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
+                    <h3 class="font-bold text-lg mb-2">Kelola Keuangan</h3>
+                    <p class="text-indigo-100 text-sm mb-4">Catat setiap perubahan kecil.</p>
+                    <button onclick="openModal()" class="w-full bg-white text-indigo-700 font-bold py-3 rounded-xl hover:bg-indigo-50 transition flex items-center justify-center gap-2">
+                        + Tambah Data
+                    </button>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-5 border-b border-slate-50 flex justify-between items-center">
+                        <h3 class="font-bold text-slate-900">Riwayat Transaksi</h3>
+                    </div>
+                    <div id="transactionList" class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-investment" class="hidden flex-col gap-8">
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Aset</span>
+                    </div>
+                    <p class="text-2xl sm:text-3xl font-extrabold text-slate-900 truncate" id="invTotalAsset">Rp 0</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-2 h-2 rounded-full bg-slate-400"></div>
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Modal Awal</span>
+                    </div>
+                    <p class="text-2xl sm:text-3xl font-extrabold text-slate-900 truncate" id="invTotalModal">Rp 0</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Keuntungan Aset</span>
+                    </div>
+                    <p class="text-2xl sm:text-3xl font-extrabold truncate" id="invTotalProfit">Rp 0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-lg text-slate-900">Performa (Untung / Rugi)</h3>
+                        <div class="flex gap-2 text-[10px] font-bold">
+                            <span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded">Naik</span>
+                            <span class="px-2 py-1 bg-red-100 text-red-700 rounded">Turun</span>
+                        </div>
+                    </div>
+                    <div class="relative h-72 w-full"><canvas id="invPerformanceChart"></canvas></div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-lg text-slate-900 mb-4">Alokasi Portofolio</h3>
+                    <div class="relative h-72 w-full flex justify-center"><canvas id="invPieChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-xl text-slate-900">Daftar Aset Saya</h3>
+                    <button onclick="openInvModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-bold text-sm shadow-md shadow-emerald-200 transition flex items-center gap-2">
+                        + Tambah Aset
+                    </button>
+                </div>
+                
+                <div id="investmentList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="inputModal" class="fixed inset-0 z-50 hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onclick="closeModal()"></div>
+        <div class="fixed inset-0 z-10 overflow-y-auto flex items-center justify-center p-4">
+            <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 transform transition-all">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-lg font-bold text-slate-900" id="modalTitle">Tambah Transaksi</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-red-500 text-2xl">&times;</button>
+                </div>
+                <form id="transactionForm" class="space-y-4">
+                    <input type="hidden" id="editId">
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                        <button type="button" onclick="setType('pemasukan')" id="btnIncome" class="py-2.5 rounded-lg text-sm font-bold transition-all text-slate-500">Pemasukan</button>
+                        <button type="button" onclick="setType('pengeluaran')" id="btnExpense" class="py-2.5 rounded-lg text-sm font-bold transition-all bg-white text-red-600 shadow-sm">Pengeluaran</button>
+                    </div>
+                    <input type="hidden" id="inputType" value="pengeluaran">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">TANGGAL</label>
+                            <input type="date" id="inputDate" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium focus:ring-2 focus:ring-indigo-500 outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">JUMLAH</label>
+                            <input type="number" id="inputAmount" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium focus:ring-2 focus:ring-indigo-500 outline-none" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">KATEGORI</label>
+                        <select id="inputCategory" onchange="checkDesc()" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">KETERANGAN <span id="descReq" class="text-red-500 hidden">*</span></label>
+                        <div class="relative">
+                            <textarea id="inputDesc" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-12 font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition" placeholder="Contoh: Beli Nasi Goreng"></textarea>
+                            <button type="button" id="btnMic" onclick="toggleVoice('inputDesc')" class="absolute right-2 bottom-2 p-2 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition">Simpan</button>
+                        <button type="button" id="btnDelete" onclick="deleteTransaction()" class="hidden px-4 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold transition">Hapus</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="invModal" class="fixed inset-0 z-50 hidden" style="z-index: 100;">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onclick="closeInvModal()"></div>
+        <div class="fixed inset-0 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div class="bg-white w-full max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl p-6 transform transition-all animate-slide-up sm:animate-none">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-slate-900" id="invModalTitle">Aset Investasi</h3>
+                    <button onclick="closeInvModal()" class="bg-slate-100 p-2 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition">&times;</button>
+                </div>
+                <form id="investmentForm" class="space-y-5">
+                    <input type="hidden" id="invEditId">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jenis Aset</label>
+                        <div class="relative">
+                            <select id="invType" onchange="toggleCashMode()" class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                                <option value="saham">Saham</option>
+                                <option value="reksadana">Reksadana</option>
+                                <option value="kripto">Kripto</option>
+                                <option value="emas">Emas</option>
+                                <option value="cash">Cash / Deposito</option>
+                                <option value="lainnya">Lainnya</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nama Aset</label>
+                        <div class="relative">
+                             <input type="text" id="invName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-10 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition" placeholder="Cth: BBCA, Bitcoin, Deposito BNI" required>
+                             <button type="button" onclick="toggleVoice('invName')" class="absolute right-2 top-2 p-2 rounded-full text-slate-400 hover:text-indigo-600 transition-all"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg></button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1 col-span-2 sm:col-span-1" id="divInitial">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Modal Awal</label>
+                            <input type="number" id="invInitial" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition" required>
+                        </div>
+                        <div class="space-y-1 col-span-2 sm:col-span-1 transition-all" id="divCurrent">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nilai Sekarang</label>
+                            <input type="number" id="invCurrent" class="w-full bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 font-bold text-emerald-800 outline-none focus:ring-2 focus:ring-emerald-500 transition" required>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 pt-2">
+                        <button type="button" id="btnInvDelete" onclick="deleteInvestment()" class="hidden px-5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl font-bold transition">Hapus</button>
+                        <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-200 transition">Simpan Aset</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Chart.register(ChartDataLabels);
+
+        const apiURL = 'api.php';
+        let activeTab = 'cashflow';
+        let barChartInstance, doughnutChartInstance, invPieChartInstance, invPerformanceChartInstance = null;
+        let currentTransactions = [], currentInvestments = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date();
+            document.getElementById('filterMonth').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            loadData();
+            setType('pengeluaran');
+            toggleCashMode();
+        });
+
+        // --- NAVIGATION ---
+        function switchTab(tab) {
+            activeTab = tab;
+            const btnCF = document.getElementById('tab-cashflow');
+            const btnInv = document.getElementById('tab-investment');
+            const viewCF = document.getElementById('view-cashflow');
+            const viewInv = document.getElementById('view-investment');
+            const monthFilter = document.getElementById('monthFilterContainer');
+
+            if (tab === 'cashflow') {
+                btnCF.className = "flex-1 sm:flex-none pb-3 border-b-2 text-sm font-bold text-indigo-600 border-indigo-600 transition-all";
+                btnInv.className = "flex-1 sm:flex-none pb-3 border-b-2 text-sm font-bold text-slate-400 border-transparent hover:text-slate-700 transition-all";
+                viewCF.classList.remove('hidden'); viewCF.classList.add('grid');
+                viewInv.classList.add('hidden'); viewInv.classList.remove('flex');
+                monthFilter.style.visibility = 'visible';
+                loadData(); 
+            } else {
+                btnCF.className = "flex-1 sm:flex-none pb-3 border-b-2 text-sm font-bold text-slate-400 border-transparent hover:text-slate-700 transition-all";
+                btnInv.className = "flex-1 sm:flex-none pb-3 border-b-2 text-sm font-bold text-emerald-600 border-emerald-600 transition-all";
+                viewCF.classList.add('hidden'); viewCF.classList.remove('grid');
+                viewInv.classList.remove('hidden'); viewInv.classList.add('flex');
+                monthFilter.style.visibility = 'hidden'; 
+                loadInvestments();
+            }
+        }
+
+        function getColorFromName(name) {
+            if (name.toLowerCase().includes('emas') || name.toLowerCase().includes('gold') || name.toLowerCase().includes('xau')) return '#F59E0B'; 
+            if (name.toLowerCase().includes('bitcoin') || name.toLowerCase().includes('btc')) return '#F7931A';
+            if (name.toLowerCase().includes('eth')) return '#627EEA';
+
+            const colors = ['#ef4444', '#f97316', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e', '#64748b'];
+            let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        function toggleCashMode() {
+            const type = document.getElementById('invType').value;
+            const divCurrent = document.getElementById('divCurrent');
+            const divInitial = document.getElementById('divInitial');
+            const currentInput = document.getElementById('invCurrent');
+            if (type === 'cash') { divCurrent.classList.add('hidden'); divInitial.className = "space-y-1 col-span-2"; currentInput.required = false; }
+            else { divCurrent.classList.remove('hidden'); divInitial.className = "space-y-1 col-span-2 sm:col-span-1"; currentInput.required = true; }
+        }
+
+        // --- LOGIKA INVESTASI ---
+        async function loadInvestments(silent = false) {
+            const res = await fetch(`${apiURL}?mode=investment&t=${new Date().getTime()}`);
+            currentInvestments = await res.json();
+            if(silent) return;
+
+            
+            let totalAsset = 0, totalModal = 0;
+            const list = document.getElementById('investmentList');
+            list.innerHTML = '';
+
+            if(currentInvestments.length === 0) list.innerHTML = '<div class="col-span-1 sm:col-span-3 text-center py-8"><p class="text-slate-400 text-sm">Belum ada aset investasi.</p></div>';
+
+            currentInvestments.forEach(inv => {
+                const initial = parseFloat(inv.initial_amount);
+                const current = parseFloat(inv.current_amount);
+                const profit = current - initial;
+                const percent = initial > 0 ? (profit / initial) * 100 : 0;
+                
+                totalAsset += current; totalModal += initial;
+                
+                let typeColor = 'bg-slate-100 text-slate-600';
+                if(inv.type === 'saham') typeColor = 'bg-blue-100 text-blue-600';
+                if(inv.type === 'kripto') typeColor = 'bg-orange-100 text-orange-600';
+                if(inv.type === 'emas') typeColor = 'bg-yellow-100 text-yellow-600';
+                if(inv.type === 'cash') typeColor = 'bg-emerald-100 text-emerald-600';
+
+                // TAMPILAN GRID CARD
+                const item = document.createElement('div');
+                item.className = "bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition cursor-pointer relative overflow-hidden group";
+                item.onclick = () => openInvModal(inv.id);
+                item.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="h-10 w-10 rounded-xl flex items-center justify-center ${typeColor} text-lg font-bold shadow-sm">
+                            ${inv.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">${inv.type}</span>
+                    </div>
+                    <h4 class="font-bold text-slate-800 text-lg group-hover:text-indigo-600 transition truncate">${inv.name}</h4>
+                    <p class="text-2xl font-extrabold text-slate-900 my-1">${formatCompact(current)}</p>
+                    <div class="flex items-center gap-1 text-xs font-bold ${profit >= 0 ? 'text-emerald-600' : 'text-red-500'}">
+                        <span>${profit >= 0 ? '▲' : '▼'}</span>
+                        <span>${profit >= 0 ? '+' : ''} ${formatRupiah(profit)}</span>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+
+            document.getElementById('invTotalAsset').innerText = formatRupiah(totalAsset);
+            document.getElementById('invTotalModal').innerText = formatRupiah(totalModal);
+            const totalProfit = totalAsset - totalModal;
+            document.getElementById('invTotalProfit').innerText = (totalProfit >= 0 ? '+' : '') + formatRupiah(totalProfit);
+            document.getElementById('invTotalProfit').className = `text-2xl sm:text-3xl font-extrabold mt-2 truncate ${totalProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`;
+
+            updateInvCharts(currentInvestments);
+        }
+
+        function updateInvCharts(assets) {
+            
+            const ctxPie = document.getElementById('invPieChart').getContext('2d');
+            if (invPieChartInstance) invPieChartInstance.destroy();
+            const labels = assets.map(a => a.name);
+            const dataValues = assets.map(a => a.current_amount);
+            const bgColors = assets.map(a => getColorFromName(a.name)); 
+
+            invPieChartInstance = new Chart(ctxPie, {
+                type: 'pie',
+                data: { labels: labels, datasets: [{ data: dataValues, backgroundColor: bgColors, borderWidth: 2, borderColor: '#ffffff' }] },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true, font: {size: 11} } },
+                        datalabels: {
+                            color: '#fff', font: { weight: 'bold', size: 11 },
+                            formatter: (value, ctx) => {
+                                let sum = 0; let dataArr = ctx.chart.data.datasets[0].data;
+                                dataArr.map(data => { sum += data; });
+                                return (value*100 / sum) > 3 ? (value*100 / sum).toFixed(1)+"%" : '';
+                            },
+                            anchor: 'center', align: 'center'
+                        }
+                    }
+                }
+            });
+
+            
+            // Grafik ini menjawab: "Mana yang Naik, Mana yang Turun?" (Kecuali Cash)
+            const ctxPerf = document.getElementById('invPerformanceChart').getContext('2d');
+            if (invPerformanceChartInstance) invPerformanceChartInstance.destroy();
+            
+            // Filter: Hapus aset tipe 'cash' khusus untuk grafik ini
+            const perfAssets = assets.filter(a => a.type !== 'cash');
+
+            // Data untuk grafik performa (Tanpa Cash)
+            const perfLabels = perfAssets.map(a => a.name);
+            const profitData = perfAssets.map(a => parseFloat(a.current_amount) - parseFloat(a.initial_amount));
+            const profitColors = profitData.map(val => val >= 0 ? '#10b981' : '#ef4444');
+
+            invPerformanceChartInstance = new Chart(ctxPerf, {
+                type: 'bar',
+                data: {
+                    labels: perfLabels, // Gunakan label yang sudah difilter
+                    datasets: [{
+                        label: 'Untung / Rugi',
+                        data: profitData, // Gunakan data yang sudah difilter
+                        backgroundColor: profitColors,
+                        borderRadius: 4,
+                        barThickness: 25
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Horizontal Bar Chart
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }, // Sembunyikan legend karena warna sudah jelas
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'end',
+                            color: '#64748b',
+                            font: { weight: 'bold', size: 10 },
+                            formatter: (value) => formatCompact(value) // Tampilkan angka di ujung bar
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return formatRupiah(context.parsed.x);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { callback: function(val) { return formatCompact(val); } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { font: { weight: 'bold' } }
+                        }
+                    }
+                }
+            });
+        }
+
+        
+        async function loadData() {
+            const month = document.getElementById('filterMonth').value;
+            const res = await fetch(`${apiURL}?month=${month}&t=${new Date().getTime()}`);
+            currentTransactions = await res.json();
+            
+            let inc = 0, exp = 0;
+            const list = document.getElementById('transactionList');
+            list.innerHTML = '';
+            let weeklyInc=[0,0,0,0], weeklyPrimer=[0,0,0,0], weeklySekunder=[0,0,0,0], weeklyTersier=[0,0,0,0], weeklyLain=[0,0,0,0];
+            let details={primer:0, sekunder:0, tersier:0, lain_lain:0};
+
+            if(currentTransactions.length === 0) list.innerHTML = '<div class="p-6 text-center text-slate-400 text-sm">Tidak ada data di bulan ini.</div>';
+
+            currentTransactions.forEach(trx => {
+                const amt = parseFloat(trx.amount);
+                const isExp = trx.type === 'pengeluaran';
+                const d = new Date(trx.date).getDate();
+                let wk = Math.min(Math.floor((d-1)/7), 3);
+
+                if(isExp) {
+                    exp += amt; 
+                    if(trx.category==='primer') weeklyPrimer[wk]+=amt;
+                    else if(trx.category==='sekunder') weeklySekunder[wk]+=amt;
+                    else if(trx.category==='tersier') weeklyTersier[wk]+=amt;
+                    else weeklyLain[wk]+=amt;
+                    if(details[trx.category]!==undefined) details[trx.category]+=amt; else details.lain_lain+=amt;
+                } else {
+                    inc += amt; weeklyInc[wk]+=amt;
+                }
+
+                const item = document.createElement('div');
+                item.className = "p-4 hover:bg-slate-50 transition flex justify-between items-center group cursor-pointer border-l-4 " + (isExp ? "border-transparent hover:border-red-500" : "border-transparent hover:border-green-500");
+                item.onclick = () => openModal(trx.id);
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-full flex items-center justify-center bg-white border border-slate-100 text-lg shadow-sm">${getIcon(trx.category)}</div>
+                        <div><p class="font-bold text-slate-800 text-sm capitalize">${trx.category.replace('_', ' ')}</p><p class="text-xs text-slate-400 truncate max-w-[120px]">${trx.description || '-'}</p></div>
+                    </div>
+                    <div class="text-right"><p class="font-bold text-sm ${isExp ? 'text-red-600' : 'text-green-600'}">${isExp ? '-' : '+'} ${formatCompact(amt)}</p><p class="text-[10px] text-slate-400">${trx.date.split('T')[0]}</p></div>
+                `;
+                list.appendChild(item);
+            });
+
+            document.getElementById('totalIncome').innerText = formatRupiah(inc);
+            document.getElementById('totalExpense').innerText = formatRupiah(exp);
+            updateCharts(weeklyInc, weeklyPrimer, weeklySekunder, weeklyTersier, weeklyLain, details);
+        }
+
+        function updateCharts(income, primer, sekunder, tersier, lain, details) {
+            const totalLabelsPlugin = {
+                id: 'totalLabelsPlugin',
+                afterDatasetsDraw(chart, args, options) {
+                    const { ctx, scales: { x, y } } = chart;
+                    ctx.save(); ctx.font = "bold 10px 'Plus Jakarta Sans'"; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                    for (let i = 0; i < 4; i++) {
+                        const incVal = income[i];
+                        if (incVal > 0) { const metaInc = chart.getDatasetMeta(0); ctx.fillStyle = '#059669'; ctx.fillText(formatCompact(incVal), metaInc.data[i].x, metaInc.data[i].y - 5); }
+                        const totalExp = primer[i] + sekunder[i] + tersier[i] + lain[i];
+                        if (totalExp > 0) { const metaExp = chart.getDatasetMeta(1); const yPos = y.getPixelForValue(totalExp); ctx.fillStyle = '#dc2626'; ctx.fillText(formatCompact(totalExp), metaExp.data[i].x, yPos - 5); }
+                    }
+                    ctx.restore();
+                }
+            };
+
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: { labels: ['M1', 'M2', 'M3', 'M4'], datasets: [{ label: 'Masuk', data: income, backgroundColor: '#10b981', stack: 'Stack 0', borderRadius: 4 }, { label: 'Primer', data: primer, backgroundColor: '#ef4444', stack: 'Stack 1', }, { label: 'Sekunder', data: sekunder, backgroundColor: '#f59e0b', stack: 'Stack 1', }, { label: 'Tersier', data: tersier, backgroundColor: '#3b82f6', stack: 'Stack 1', }, { label: 'Lain', data: lain, backgroundColor: '#94a3b8', stack: 'Stack 1', borderRadius: { topLeft: 4, topRight: 4 } }] },
+                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } } }, datalabels: { display: false } }, scales: { y: { beginAtZero: true, stacked: true, grid: { borderDash: [5, 5] } }, x: { stacked: true, grid: { display: false } } } },
+                plugins: [totalLabelsPlugin]
+            });
+
+            const ctxDoughnut = document.getElementById('doughnutChart').getContext('2d');
+            if (doughnutChartInstance) doughnutChartInstance.destroy();
+            doughnutChartInstance = new Chart(ctxDoughnut, {
+                type: 'doughnut',
+                data: { labels: ['Primer', 'Sekunder', 'Tersier', 'Lain'], datasets: [{ data: [details.primer, details.sekunder, details.tersier, details.lain_lain], backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#94a3b8'], borderWidth: 0, hoverOffset: 4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } } }, datalabels: { display: false } }, cutout: '65%', }
+            });
+        }
+
+        
+        function exportToExcel() {
+            const wb = XLSX.utils.book_new();
+            if(currentTransactions.length > 0) {
+                const dataCF = currentTransactions.map(item => ({ Tanggal: item.date.split('T')[0], Tipe: item.type, Kategori: item.category, Jumlah: parseFloat(item.amount), Keterangan: item.description }));
+                const wsCF = XLSX.utils.json_to_sheet(dataCF); XLSX.utils.book_append_sheet(wb, wsCF, "Arus Kas");
+            }
+            if(activeTab === 'investment' || currentInvestments.length > 0) {
+                if(currentInvestments.length === 0) loadInvestments(true); 
+                const dataInv = currentInvestments.map(item => ({ Jenis: item.type, Nama: item.name, 'Modal Awal': parseFloat(item.initial_amount), 'Nilai Sekarang': parseFloat(item.current_amount), 'Profit': parseFloat(item.profit) }));
+                const wsInv = XLSX.utils.json_to_sheet(dataInv); XLSX.utils.book_append_sheet(wb, wsInv, "Portofolio");
+            }
+            XLSX.writeFile(wb, `Laporan_${document.getElementById('filterMonth').value}.xlsx`);
+        }
+
+        function openInvModal(editId=null) { 
+            document.getElementById('invModal').classList.remove('hidden'); document.getElementById('invEditId').value=editId||''; document.getElementById('btnInvDelete').classList.toggle('hidden',!editId); document.getElementById('invModalTitle').innerText = editId ? "Update Aset" : "Tambah Aset";
+            if(editId){ const i=currentInvestments.find(x=>x.id==editId); document.getElementById('invType').value=i.type; document.getElementById('invName').value=i.name; document.getElementById('invInitial').value=i.initial_amount; document.getElementById('invCurrent').value=i.current_amount; } else { document.getElementById('investmentForm').reset(); document.getElementById('invType').value='saham'; }
+            toggleCashMode();
+        }
+        function closeInvModal() { document.getElementById('invModal').classList.add('hidden'); }
+        document.getElementById('investmentForm').addEventListener('submit', async(e)=>{ 
+            e.preventDefault(); const id=document.getElementById('invEditId').value; const type = document.getElementById('invType').value; let currentVal = document.getElementById('invCurrent').value; if(type === 'cash') currentVal = document.getElementById('invInitial').value;
+            const data={ type: type, name: document.getElementById('invName').value, initial_amount: document.getElementById('invInitial').value, current_amount: currentVal }; 
+            let url=`${apiURL}?mode=investment`; if(id) url+=`&id=${id}`; await fetch(url,{method:id?'PUT':'POST',body:JSON.stringify(data)}); closeInvModal(); loadInvestments(); 
+        });
+        async function deleteInvestment(){ if(confirm('Hapus aset ini?')) { await fetch(`${apiURL}?mode=investment&id=${document.getElementById('invEditId').value}`,{method:'DELETE'}); closeInvModal(); loadInvestments(); } }
+
+        function openModal(editId=null) { document.getElementById('inputModal').classList.remove('hidden'); document.getElementById('editId').value=editId||''; document.getElementById('btnDelete').classList.toggle('hidden',!editId); if(editId){const t=currentTransactions.find(x=>x.id==editId); setType(t.type); document.getElementById('inputDate').value=t.date.split('T')[0];document.getElementById('inputAmount').value=t.amount;document.getElementById('inputDesc').value=t.description;document.getElementById('inputCategory').value=t.category;}else{document.getElementById('transactionForm').reset();document.getElementById('inputDate').valueAsDate=new Date();setType('pengeluaran');} }
+        function closeModal() { document.getElementById('inputModal').classList.add('hidden'); }
+        function setType(t){ document.getElementById('inputType').value=t; document.getElementById('btnIncome').className=`py-2.5 rounded-lg text-sm font-bold w-full transition-all ${t==='pemasukan'?'text-green-600 bg-white shadow-sm':'text-slate-500 hover:text-slate-200'}`; document.getElementById('btnExpense').className=`py-2.5 rounded-lg text-sm font-bold w-full transition-all ${t==='pengeluaran'?'text-red-600 bg-white shadow-sm':'text-slate-500 hover:text-slate-200'}`; const cat=document.getElementById('inputCategory'); cat.innerHTML=t==='pemasukan'?`<option value="gaji">Gaji</option><option value="bonus">Bonus</option><option value="investasi">Investasi</option>`:`<option value="primer">Primer</option><option value="sekunder">Sekunder</option><option value="tersier">Tersier</option><option value="lain_lain">Lain-lain</option>`; }
+        function checkDesc(){ const c=document.getElementById('inputCategory').value; document.getElementById('descReq').className=c==='lain_lain'?'text-red-500':'hidden'; }
+        document.getElementById('transactionForm').addEventListener('submit', async(e)=>{ e.preventDefault(); const id=document.getElementById('editId').value; const data={type:document.getElementById('inputType').value,date:document.getElementById('inputDate').value,category:document.getElementById('inputCategory').value,amount:document.getElementById('inputAmount').value,description:document.getElementById('inputDesc').value}; let url=apiURL; if(id) url+=`?id=${id}`; await fetch(url,{method:id?'PUT':'POST',body:JSON.stringify(data)}); closeModal(); loadData(); });
+        async function deleteTransaction(){ if(confirm('Hapus transaksi ini?')){ await fetch(`${apiURL}?id=${document.getElementById('editId').value}`,{method:'DELETE'}); closeModal(); loadData(); } }
+        
+        function toggleVoice(id){ const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return alert('Browser tidak support'); const r=new SR(); r.lang='id-ID'; r.start(); r.onresult=e=>{const t=e.results[0][0].transcript; const el=document.getElementById(id); el.value=(el.value?el.value+" ":"")+t.charAt(0).toUpperCase()+t.slice(1);}; }
+        function formatRupiah(n){ return "Rp "+n.toLocaleString('id-ID'); }
+        function formatCompact(n){ return new Intl.NumberFormat('id-ID',{notation:"compact"}).format(n); }
+        function getIcon(c){ const i={primer:'🏠',sekunder:'☕',tersier:'🎮',gaji:'💰',bonus:'🎁',investasi:'📈',lain_lain:'📝'}; return i[c]||'📝'; }
+    </script>
+</body>
+</html>
