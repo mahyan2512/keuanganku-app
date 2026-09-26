@@ -4,14 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Keuanganku - Dashboard</title>
-    <link rel="icon" href="/icons/icon-192.png">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#4f46e5">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Keuanganku">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><text x='50' y='70' fill='white' font-size='70' text-anchor='middle' font-family='sans-serif' font-weight='bold'>K</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -36,12 +29,6 @@
                 </div>
                 
                 <div class="flex items-center gap-2">
-                    <button id="btnInstallApp" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg transition shadow-sm items-center gap-1.5 text-xs font-bold" title="Instal Aplikasi">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        <span>Instal</span>
-                    </button>
                     <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition shadow-sm" title="Export Excel">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -271,8 +258,7 @@
     <script>
         Chart.register(ChartDataLabels);
 
-        // Endpoint Cloudflare Pages Functions
-        const apiURL = '/api';
+        const apiURL = 'api.php';
         let activeTab = 'cashflow';
         let barChartInstance, doughnutChartInstance, invPieChartInstance, invPerformanceChartInstance = null;
         let currentTransactions = [], currentInvestments = [];
@@ -597,42 +583,6 @@
         function formatRupiah(n){ return "Rp "+n.toLocaleString('id-ID'); }
         function formatCompact(n){ return new Intl.NumberFormat('id-ID',{notation:"compact"}).format(n); }
         function getIcon(c){ const i={primer:'🏠',sekunder:'☕',tersier:'🎮',gaji:'💰',bonus:'🎁',investasi:'📈',lain_lain:'📝'}; return i[c]||'📝'; }
-
-        // --- PWA: REGISTRASI SERVICE WORKER & INSTALASI ---
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch((err) => {
-                    console.log('SW registration failed:', err);
-                });
-            });
-        }
-
-        let deferredInstallPrompt = null;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredInstallPrompt = e;
-            const btn = document.getElementById('btnInstallApp');
-            if (btn) {
-                btn.classList.remove('hidden');
-                btn.classList.add('flex');
-            }
-        });
-
-        document.getElementById('btnInstallApp')?.addEventListener('click', async () => {
-            if (!deferredInstallPrompt) return;
-            deferredInstallPrompt.prompt();
-            const { outcome } = await deferredInstallPrompt.userChoice;
-            if (outcome === 'accepted') {
-                const btn = document.getElementById('btnInstallApp');
-                if (btn) btn.classList.add('hidden');
-            }
-            deferredInstallPrompt = null;
-        });
-
-        window.addEventListener('appinstalled', () => {
-            const btn = document.getElementById('btnInstallApp');
-            if (btn) btn.classList.add('hidden');
-        });
     </script>
 </body>
 </html>
